@@ -1,0 +1,6 @@
+@CarbonPulseScheduler.Api_HostAddress = http://localhost:5170
+
+GET {{CarbonPulseScheduler.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

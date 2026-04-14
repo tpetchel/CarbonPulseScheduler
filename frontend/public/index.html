@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CarbonPulse Scheduler</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e0e0e8;
+    --muted: #8888a0;
+    --accent: #4ade80;
+    --accent2: #22d3ee;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --running: #4ade80;
+    --scheduled: #22d3ee;
+    --completed: #8888a0;
+    --pending: #fbbf24;
+    --cancelled: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  header h1 span { color: var(--text); font-weight: 300; }
+  .clock-display {
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 1.1rem;
+    color: var(--accent2);
+  }
+  .clock-display .label { color: var(--muted); font-size: 0.8rem; }
+  main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 16px;
+    padding: 16px 24px;
+    max-width: 1600px;
+    margin: 0 auto;
+    height: calc(100vh - 64px);
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .panel h2 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* Left column */
+  .left-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    grid-row: 1 / 3;
+  }
+
+  /* Form */
+  .form-group { margin-bottom: 10px; }
+  .form-group label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.85rem;
+  }
+  .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-secondary { background: var(--border); color: var(--text); }
+  .btn-danger { background: var(--danger); color: #000; }
+  .btn-sm { padding: 4px 10px; font-size: 0.78rem; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Clock controls */
+  .clock-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+  .clock-controls .btn { flex: 1; min-width: 50px; text-align: center; }
+  .clock-controls .btn.active { outline: 2px solid var(--accent); }
+  .speed-info { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+
+  /* Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .stat-card .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-card .stat-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Right column */
+  .right-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Timeline */
+  .timeline-container {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  #timeline {
+    width: 100%;
+    min-height: 200px;
+  }
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    height: 32px;
+  }
+  .timeline-label {
+    width: 90px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .timeline-track {
+    flex: 1;
+    position: relative;
+    height: 24px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .timeline-bar {
+    position: absolute;
+    height: 100%;
+    border-radius: 4px;
+    min-width: 3px;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    font-size: 0.68rem;
+    color: #000;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .timeline-bar.window {
+    background: rgba(255,255,255,0.06);
+    border: 1px dashed var(--border);
+    color: var(--muted);
+  }
+  .timeline-bar.Scheduled { background: var(--scheduled); }
+  .timeline-bar.Running { background: var(--running); }
+  .timeline-bar.Completed { background: var(--completed); }
+  .timeline-bar.Pending { background: var(--pending); }
+  .timeline-bar.Cancelled { background: var(--cancelled); }
+
+  .timeline-axis {
+    display: flex;
+    margin-left: 90px;
+    margin-bottom: 8px;
+    font-size: 0.68rem;
+    color: var(--muted);
+    position: relative;
+    height: 20px;
+  }
+  .timeline-axis span {
+    position: absolute;
+    transform: translateX(-50%);
+  }
+  .now-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    z-index: 10;
+    pointer-events: none;
+  }
+  .now-line::after {
+    content: 'NOW';
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.6rem;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* Map */
+  .map-container { position: relative; }
+  #world-map {
+    width: 100%;
+    height: 120px;
+    background: var(--bg);
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .region-dot {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: translate(-50%, -50%);
+    animation: pulse 2s infinite;
+  }
+  .region-dot .region-count {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.68rem;
+    background: var(--surface);
+    padding: 1px 5px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(74,222,128,0); }
+  }
+  .region-dot.idle {
+    background: var(--border);
+    animation: none;
+  }
+
+  /* Job list */
+  .job-list {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .job-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: 6px;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+  }
+  .job-item .job-meta { flex: 1; }
+  .job-item .job-meta strong { color: var(--text); }
+  .job-item .job-meta .region-tag {
+    display: inline-block;
+    background: var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.7rem;
+    margin-left: 6px;
+  }
+  .status-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+  .status-Pending { background: var(--pending); color: #000; }
+  .status-Scheduled { background: var(--scheduled); color: #000; }
+  .status-Running { background: var(--running); color: #000; }
+  .status-Completed { background: var(--completed); color: #000; }
+  .status-Cancelled { background: var(--cancelled); color: #000; }
+
+  .empty-state {
+    text-align: center;
+    padding: 32px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CarbonPulse <span>Scheduler</span></h1>
+  <div class="clock-display">
+    <div class="label">Virtual Time</div>
+    <div id="virtual-time">--</div>
+  </div>
+</header>
+
+<main>
+  <!-- Left column -->
+  <div class="left-col">
+    <div class="panel">
+      <h2>Submit Job</h2>
+      <form id="job-form">
+        <div class="form-group">
+          <label>Region</label>
+          <select id="region">
+            <option value="westus">West US</option>
+            <option value="eastus">East US</option>
+            <option value="northeurope">North Europe</option>
+            <option value="westeurope">West Europe</option>
+            <option value="eastasia">East Asia</option>
+            <option value="australiaeast">Australia East</option>
+            <option value="brazilsouth">Brazil South</option>
+            <option value="japaneast">Japan East</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Earliest Start</label>
+          <input type="datetime-local" id="earliest-start">
+        </div>
+        <div class="form-group">
+          <label>Latest End</label>
+          <input type="datetime-local" id="latest-end">
+        </div>
+        <div class="form-group">
+          <label>Duration (minutes)</label>
+          <input type="number" id="duration" value="45" min="1" max="480">
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary">Schedule Job</button>
+          <button type="button" class="btn btn-secondary" id="random-btn">Random Job</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Virtual Clock</h2>
+      <div class="clock-controls">
+        <button class="btn btn-secondary btn-sm" data-clock="reset">Reset</button>
+        <button class="btn btn-secondary btn-sm" data-clock="1">1x</button>
+        <button class="btn btn-secondary btn-sm" data-clock="5">5x</button>
+        <button class="btn btn-secondary btn-sm" data-clock="10">10x</button>
+        <button class="btn btn-secondary btn-sm" data-clock="60">60x</button>
+        <button class="btn btn-secondary btn-sm" data-clock="pause">⏸</button>
+        <button class="btn btn-secondary btn-sm" data-clock="resume">▶</button>
+      </div>
+      <div class="speed-info" id="speed-info">Speed: 1x</div>
+    </div>
+
+    <div class="panel">
+      <h2>Statistics</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-label">Total Jobs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-running">0</div>
+          <div class="stat-label">Running</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-completed">0</div>
+          <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-shifted">0</div>
+          <div class="stat-label">Carbon-Hrs Shifted</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Region Activity</h2>
+      <div id="world-map"></div>
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div class="right-col">
+    <div class="panel" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+      <h2>Job Timeline</h2>
+      <div class="timeline-container">
+        <div class="timeline-axis" id="timeline-axis"></div>
+        <div id="timeline"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="max-height: 35vh;">
+      <h2>Job List</h2>
+      <div class="job-list" id="job-list">
+        <div class="empty-state">No jobs yet. Submit a job to get started.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = '';
+let jobs = [];
+let clockState = { virtualNow: new Date().toISOString(), speedMultiplier: 1, paused: false };
+
+// Region coordinates on a simple flat map (percentage positions)
+const REGION_COORDS = {
+  westus:        { x: 12, y: 40, label: 'West US' },
+  eastus:        { x: 22, y: 40, label: 'East US' },
+  northeurope:   { x: 47, y: 25, label: 'N. Europe' },
+  westeurope:    { x: 47, y: 35, label: 'W. Europe' },
+  eastasia:      { x: 78, y: 38, label: 'E. Asia' },
+  australiaeast: { x: 83, y: 72, label: 'Australia' },
+  brazilsouth:   { x: 30, y: 68, label: 'Brazil S.' },
+  japaneast:     { x: 85, y: 35, label: 'Japan' },
+};
+
+// Rate limiter: 60 per minute
+const rateLimiter = { timestamps: [] };
+function checkRateLimit() {
+  const now = Date.now();
+  rateLimiter.timestamps = rateLimiter.timestamps.filter(t => now - t < 60000);
+  if (rateLimiter.timestamps.length >= 60) return false;
+  rateLimiter.timestamps.push(now);
+  return true;
+}
+
+// API helpers
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+}
+
+// Initialize form defaults
+function initFormDefaults() {
+  const now = new Date();
+  const start = new Date(now.getTime() + 30 * 60000);
+  const end = new Date(now.getTime() + 8 * 3600000);
+  document.getElementById('earliest-start').value = toLocalISOString(start);
+  document.getElementById('latest-end').value = toLocalISOString(end);
+}
+
+function toLocalISOString(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Create job
+document.getElementById('job-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!checkRateLimit()) return alert('Rate limit exceeded: max 60 jobs per minute.');
+
+  const body = {
+    region: document.getElementById('region').value,
+    earliestStart: new Date(document.getElementById('earliest-start').value).toISOString(),
+    latestEnd: new Date(document.getElementById('latest-end').value).toISOString(),
+    durationMinutes: parseInt(document.getElementById('duration').value),
+  };
+
+  try {
+    await api('POST', '/api/jobs', body);
+    await refreshJobs();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+});
+
+// Random job
+document.getElementById('random-btn').addEventListener('click', async () => {
+  if (!checkRateLimit()) return alert('Rate limit exceeded.');
+
+  const regions = Object.keys(REGION_COORDS);
+  const region = regions[Math.floor(Math.random() * regions.length)];
+  const now = new Date(clockState.virtualNow);
+  const offsetMin = Math.floor(Math.random() * 60);
+  const start = new Date(now.getTime() + offsetMin * 60000);
+  const windowHours = 2 + Math.floor(Math.random() * 6);
+  const end = new Date(start.getTime() + windowHours * 3600000);
+  const duration = 15 + Math.floor(Math.random() * 90);
+
+  try {
+    await api('POST', '/api/jobs', {
+      region,
+      earliestStart: start.toISOString(),
+      latestEnd: end.toISOString(),
+      durationMinutes: duration,
+    });
+    await refreshJobs();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+});
+
+// Clock controls
+document.querySelectorAll('[data-clock]').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const action = btn.dataset.clock;
+    let body;
+    if (action === 'reset') body = { mode: 'reset' };
+    else if (action === 'pause') body = { mode: 'pause' };
+    else if (action === 'resume') body = { mode: 'resume' };
+    else body = { mode: 'accelerate', value: action };
+
+    try {
+      clockState = await api('POST', '/api/clock', body);
+      updateClockUI();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  });
+});
+
+async function refreshClock() {
+  try {
+    clockState = await api('GET', '/api/clock');
+    updateClockUI();
+  } catch {}
+}
+
+function updateClockUI() {
+  const d = new Date(clockState.virtualNow);
+  document.getElementById('virtual-time').textContent =
+    d.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+
+  const info = clockState.paused
+    ? 'Paused'
+    : `Speed: ${clockState.speedMultiplier}x`;
+  document.getElementById('speed-info').textContent = info;
+
+  // Highlight active speed button
+  document.querySelectorAll('[data-clock]').forEach(btn => {
+    btn.classList.remove('active');
+    if (!clockState.paused && btn.dataset.clock === String(clockState.speedMultiplier)) {
+      btn.classList.add('active');
+    }
+    if (clockState.paused && btn.dataset.clock === 'pause') {
+      btn.classList.add('active');
+    }
+  });
+}
+
+async function refreshJobs() {
+  try {
+    jobs = await api('GET', '/api/jobs');
+    renderJobList();
+    renderTimeline();
+    renderStats();
+    renderMap();
+  } catch {}
+}
+
+function renderJobList() {
+  const el = document.getElementById('job-list');
+  if (jobs.length === 0) {
+    el.innerHTML = '<div class="empty-state">No jobs yet. Submit a job to get started.</div>';
+    return;
+  }
+
+  el.innerHTML = jobs.map(j => `
+    <div class="job-item">
+      <div class="job-meta">
+        <strong>${j.jobId.substring(0, 8)}</strong>
+        <span class="region-tag">${j.region}</span>
+        <span style="margin-left:6px;font-size:0.72rem;color:var(--muted)">${j.durationMinutes}min</span>
+      </div>
+      <span class="status-badge status-${j.status}">${j.status}</span>
+      ${j.status !== 'Completed' && j.status !== 'Cancelled' ? `<button class="btn btn-danger btn-sm" style="margin-left:6px" onclick="cancelJob('${j.jobId}')">Cancel</button>` : ''}
+    </div>
+  `).join('');
+}
+
+async function cancelJob(id) {
+  try {
+    await api('POST', `/api/jobs/${id}/cancel`);
+    await refreshJobs();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+function renderTimeline() {
+  const container = document.getElementById('timeline');
+  const axisEl = document.getElementById('timeline-axis');
+
+  if (jobs.length === 0) {
+    container.innerHTML = '<div class="empty-state">No jobs to display.</div>';
+    axisEl.innerHTML = '';
+    return;
+  }
+
+  // Determine time range
+  const now = new Date(clockState.virtualNow);
+  let minT = now.getTime();
+  let maxT = now.getTime();
+  jobs.forEach(j => {
+    const es = new Date(j.earliestStart).getTime();
+    const le = new Date(j.latestEnd).getTime();
+    if (es < minT) minT = es;
+    if (le > maxT) maxT = le;
+  });
+  // Add padding
+  const range = maxT - minT || 3600000;
+  minT -= range * 0.05;
+  maxT += range * 0.05;
+  const totalRange = maxT - minT;
+
+  function pct(t) { return ((t - minT) / totalRange * 100); }
+
+  // Axis ticks
+  const tickCount = 8;
+  let axisHTML = '';
+  for (let i = 0; i <= tickCount; i++) {
+    const t = new Date(minT + (totalRange / tickCount) * i);
+    const label = t.toISOString().substring(11, 16);
+    axisHTML += `<span style="left:${(i / tickCount * 100).toFixed(1)}%">${label}</span>`;
+  }
+  axisEl.innerHTML = axisHTML;
+
+  // Render rows
+  let html = '';
+  jobs.forEach(j => {
+    const es = new Date(j.earliestStart).getTime();
+    const le = new Date(j.latestEnd).getTime();
+
+    let barHTML = '';
+
+    // Allowable window (always shown)
+    const wLeft = pct(es);
+    const wWidth = pct(le) - wLeft;
+    barHTML += `<div class="timeline-bar window" style="left:${wLeft}%;width:${wWidth}%"></div>`;
+
+    // Scheduled/execution bar
+    if (j.scheduledStart) {
+      const ss = new Date(j.scheduledStart).getTime();
+      const se = new Date(j.scheduledEnd).getTime();
+      const sLeft = pct(ss);
+      const sWidth = pct(se) - sLeft;
+      barHTML += `<div class="timeline-bar ${j.status}" style="left:${sLeft}%;width:${Math.max(sWidth, 0.5)}%">${j.region} ${j.durationMinutes}m</div>`;
+    }
+
+    // Now line
+    const nowPct = pct(now.getTime());
+    if (nowPct >= 0 && nowPct <= 100) {
+      barHTML += `<div class="now-line" style="left:${nowPct}%"></div>`;
+    }
+
+    html += `
+      <div class="timeline-row">
+        <div class="timeline-label" title="${j.jobId}">${j.jobId.substring(0, 8)}</div>
+        <div class="timeline-track">${barHTML}</div>
+      </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function renderStats() {
+  const total = jobs.length;
+  const running = jobs.filter(j => j.status === 'Running').length;
+  const completed = jobs.filter(j => j.status === 'Completed').length;
+
+  // "Carbon-hours shifted" — toy metric: sum of deferral time
+  let shiftedMinutes = 0;
+  jobs.forEach(j => {
+    if (j.scheduledStart) {
+      const diff = (new Date(j.scheduledStart) - new Date(j.earliestStart)) / 60000;
+      if (diff > 0) shiftedMinutes += diff;
+    }
+  });
+  const shiftedHours = (shiftedMinutes / 60).toFixed(1);
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-running').textContent = running;
+  document.getElementById('stat-completed').textContent = completed;
+  document.getElementById('stat-shifted').textContent = shiftedHours;
+}
+
+function renderMap() {
+  const map = document.getElementById('world-map');
+
+  // Count running jobs per region
+  const regionCounts = {};
+  jobs.forEach(j => {
+    if (j.status === 'Running') {
+      regionCounts[j.region] = (regionCounts[j.region] || 0) + 1;
+    }
+  });
+
+  let html = '';
+  // Draw simple continent outlines with SVG
+  html += `<svg viewBox="0 0 100 60" style="width:100%;height:100%;position:absolute;top:0;left:0" preserveAspectRatio="none">
+    <rect width="100" height="60" fill="transparent"/>
+    <!-- Very simplified continent shapes -->
+    <path d="M8,15 L22,12 L25,20 L22,35 L18,45 L12,48 L8,35 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
+    <path d="M26,15 L30,12 L32,18 L35,32 L30,50 L28,45 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
+    <path d="M40,10 L55,8 L58,20 L55,35 L48,38 L38,32 L36,20 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
+    <path d="M58,15 L75,10 L82,20 L85,30 L78,35 L65,32 L60,25 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
+    <path d="M75,40 L88,38 L90,50 L80,52 L75,48 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
+  </svg>`;
+
+  Object.entries(REGION_COORDS).forEach(([id, coord]) => {
+    const count = regionCounts[id] || 0;
+    const active = count > 0;
+    html += `<div class="region-dot ${active ? '' : 'idle'}" style="left:${coord.x}%;top:${coord.y}%">
+      <span class="region-count">${coord.label}${active ? ` (${count})` : ''}</span>
+    </div>`;
+  });
+
+  map.innerHTML = html;
+}
+
+// Polling loop
+async function poll() {
+  await Promise.all([refreshClock(), refreshJobs()]);
+}
+
+initFormDefaults();
+poll();
+setInterval(poll, 1500);
+</script>
+
+</body>
+</html>
