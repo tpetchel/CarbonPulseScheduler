@@ -4,7 +4,16 @@ namespace CarbonPulseScheduler.Api.Services;
 
 public class MockCarbonProvider : ICarbonIntensityProvider
 {
-    public IReadOnlyList<CarbonIntensityPoint> GetForecast(string region, DateTimeOffset start, DateTimeOffset end)
+    private static readonly IReadOnlyList<string> MockRegions =
+    [
+        "westus", "eastus", "northeurope", "westeurope",
+        "eastasia", "australiaeast", "brazilsouth", "japaneast"
+    ];
+
+    public Task<IReadOnlyList<string>> GetRegionsAsync() =>
+        Task.FromResult(MockRegions);
+
+    public Task<IReadOnlyList<CarbonIntensityPoint>> GetForecastAsync(string region, DateTimeOffset start, DateTimeOffset end)
     {
         // Generate a synthetic sinusoidal curve with region-based offset
         var points = new List<CarbonIntensityPoint>();
@@ -32,6 +41,6 @@ public class MockCarbonProvider : ICarbonIntensityProvider
             current = current.AddMinutes(5);
         }
 
-        return points;
+        return Task.FromResult<IReadOnlyList<CarbonIntensityPoint>>(points);
     }
 }

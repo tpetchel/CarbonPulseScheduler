@@ -16,12 +16,12 @@ public class ForecastController : ControllerBase
     }
 
     [HttpGet]
-    public IActionResult Get([FromQuery] string region, [FromQuery] DateTimeOffset start, [FromQuery] DateTimeOffset end)
+    public async Task<IActionResult> Get([FromQuery] string region, [FromQuery] DateTimeOffset start, [FromQuery] DateTimeOffset end)
     {
         if (string.IsNullOrWhiteSpace(region))
             return BadRequest("Region is required.");
 
-        var forecast = _provider.GetForecast(region, start, end);
+        var forecast = await _provider.GetForecastAsync(region, start, end);
         return Ok(forecast);
     }
 }

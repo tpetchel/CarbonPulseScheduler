@@ -4,5 +4,5 @@ namespace CarbonPulseScheduler.Api.Services;
 
 public interface IJobScheduler
 {
-    SchedulingDecision Recommend(Job job, SchedulingContext context);
+    Task<SchedulingDecision> RecommendAsync(Job job, SchedulingContext context);
 }

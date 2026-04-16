@@ -4,5 +4,6 @@ namespace CarbonPulseScheduler.Api.Services;
 
 public interface ICarbonIntensityProvider
 {
-    IReadOnlyList<CarbonIntensityPoint> GetForecast(string region, DateTimeOffset start, DateTimeOffset end);
+    Task<IReadOnlyList<CarbonIntensityPoint>> GetForecastAsync(string region, DateTimeOffset start, DateTimeOffset end);
+    Task<IReadOnlyList<string>> GetRegionsAsync();
 }

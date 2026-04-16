@@ -20,7 +20,7 @@ public class JobsController : ControllerBase
     }
 
     [HttpPost]
-    public IActionResult Create([FromBody] CreateJobRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateJobRequest request)
     {
         if (request.DurationMinutes <= 0)
             return BadRequest("Duration must be positive.");
@@ -38,9 +38,9 @@ public class JobsController : ControllerBase
             Status = JobStatus.Pending
         };
 
-        var forecast = _carbonProvider.GetForecast(job.Region, job.EarliestStart, job.LatestEnd);
+        var forecast = await _carbonProvider.GetForecastAsync(job.Region, job.EarliestStart, job.LatestEnd);
         var context = new SchedulingContext { Forecast = forecast };
-        var decision = _scheduler.Recommend(job, context);
+        var decision = await _scheduler.RecommendAsync(job, context);
 
         job.ScheduledStart = decision.RecommendedStart;
         job.ScheduledEnd = decision.RecommendedStart + job.Duration;

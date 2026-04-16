@@ -226,9 +226,10 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: var(--accent);
+    background: #ff6b35;
     z-index: 10;
     pointer-events: none;
+    filter: drop-shadow(0 0 4px rgba(255, 107, 53, 0.7));
   }
   .now-line::after {
     content: 'NOW';
@@ -237,7 +238,7 @@
     left: 50%;
     transform: translateX(-50%);
     font-size: 0.6rem;
-    color: var(--accent);
+    color: #ff6b35;
     font-weight: 700;
   }
 
@@ -345,14 +346,8 @@
         <div class="form-group">
           <label>Region</label>
           <select id="region">
-            <option value="westus">West US</option>
-            <option value="eastus">East US</option>
-            <option value="northeurope">North Europe</option>
-            <option value="westeurope">West Europe</option>
-            <option value="eastasia">East Asia</option>
-            <option value="australiaeast">Australia East</option>
-            <option value="brazilsouth">Brazil South</option>
-            <option value="japaneast">Japan East</option>
+            <option value="">Loading regions...</option>
+          </select>
           </select>
         </div>
         <div class="form-group">
@@ -439,9 +434,11 @@
 const API = '';
 let jobs = [];
 let clockState = { virtualNow: new Date().toISOString(), speedMultiplier: 1, paused: false };
+let availableRegions = [];
 
 // Region coordinates on a simple flat map (percentage positions)
-const REGION_COORDS = {
+// Used as fallback and for map placement; regions from the API are authoritative
+const KNOWN_REGION_COORDS = {
   westus:        { x: 12, y: 40, label: 'West US' },
   eastus:        { x: 22, y: 40, label: 'East US' },
   northeurope:   { x: 47, y: 25, label: 'N. Europe' },
@@ -450,7 +447,47 @@ const REGION_COORDS = {
   australiaeast: { x: 83, y: 72, label: 'Australia' },
   brazilsouth:   { x: 30, y: 68, label: 'Brazil S.' },
   japaneast:     { x: 85, y: 35, label: 'Japan' },
+  CAISO_NORTH:   { x: 10, y: 38, label: 'CAISO N.' },
+  CAISO_SOUTH:   { x: 11, y: 42, label: 'CAISO S.' },
 };
+
+function getRegionCoords() {
+  // Build map coords from available regions, falling back to known positions
+  const coords = {};
+  availableRegions.forEach((r, i) => {
+    const key = r.toLowerCase ? r : r;
+    if (KNOWN_REGION_COORDS[r]) {
+      coords[r] = KNOWN_REGION_COORDS[r];
+    } else if (KNOWN_REGION_COORDS[key]) {
+      coords[r] = KNOWN_REGION_COORDS[key];
+    } else {
+      // Distribute unknown regions evenly
+      coords[r] = { x: 15 + (i * 10) % 70, y: 30 + (i * 7) % 30, label: r };
+    }
+  });
+  return coords;
+}
+
+async function loadRegions() {
+  try {
+    const regions = await api('GET', '/api/regions');
+    if (Array.isArray(regions) && regions.length > 0) {
+      availableRegions = regions;
+    }
+  } catch {
+    // Fall back to known defaults
+  }
+  if (availableRegions.length === 0) {
+    availableRegions = Object.keys(KNOWN_REGION_COORDS);
+  }
+
+  // Populate dropdown
+  const select = document.getElementById('region');
+  select.innerHTML = availableRegions.map(r => {
+    const label = KNOWN_REGION_COORDS[r]?.label || r;
+    return `<option value="${r}">${label}</option>`;
+  }).join('');
+}
 
 // Rate limiter: 60 per minute
 const rateLimiter = { timestamps: [] };
@@ -488,6 +525,24 @@ function toLocalISOString(d) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function formatLocalDateTime(d) {
+  const pad = n => String(n).padStart(2, '0');
+  let h = d.getHours(); const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${h}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${ampm}`;
+}
+
+function formatLocalTime(d) {
+  const pad = n => String(n).padStart(2, '0');
+  let h = d.getHours(); const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
+  return `${h}:${pad(d.getMinutes())} ${ampm}`;
+}
+
+function formatLocalDateTimeShort(d) {
+  const pad = n => String(n).padStart(2, '0');
+  let h = d.getHours(); const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
+  return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${h}:${pad(d.getMinutes())} ${ampm}`;
+}
+
 // Create job
 document.getElementById('job-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -512,8 +567,7 @@ document.getElementById('job-form').addEventListener('submit', async (e) => {
 document.getElementById('random-btn').addEventListener('click', async () => {
   if (!checkRateLimit()) return alert('Rate limit exceeded.');
 
-  const regions = Object.keys(REGION_COORDS);
-  const region = regions[Math.floor(Math.random() * regions.length)];
+  const region = availableRegions[Math.floor(Math.random() * availableRegions.length)];
   const now = new Date(clockState.virtualNow);
   const offsetMin = Math.floor(Math.random() * 60);
   const start = new Date(now.getTime() + offsetMin * 60000);
@@ -562,8 +616,7 @@ async function refreshClock() {
 
 function updateClockUI() {
   const d = new Date(clockState.virtualNow);
-  document.getElementById('virtual-time').textContent =
-    d.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+  document.getElementById('virtual-time').textContent = formatLocalDateTime(d);
 
   const info = clockState.paused
     ? 'Paused'
@@ -654,7 +707,7 @@ function renderTimeline() {
   let axisHTML = '';
   for (let i = 0; i <= tickCount; i++) {
     const t = new Date(minT + (totalRange / tickCount) * i);
-    const label = t.toISOString().substring(11, 16);
+    const label = formatLocalTime(t);
     axisHTML += `<span style="left:${(i / tickCount * 100).toFixed(1)}%">${label}</span>`;
   }
   axisEl.innerHTML = axisHTML;
@@ -678,7 +731,10 @@ function renderTimeline() {
       const se = new Date(j.scheduledEnd).getTime();
       const sLeft = pct(ss);
       const sWidth = pct(se) - sLeft;
-      barHTML += `<div class="timeline-bar ${j.status}" style="left:${sLeft}%;width:${Math.max(sWidth, 0.5)}%">${j.region} ${j.durationMinutes}m</div>`;
+      const startLocal = formatLocalDateTimeShort(new Date(j.scheduledStart));
+      const endLocal = formatLocalDateTimeShort(new Date(j.scheduledEnd));
+      const tooltip = `${j.region} | Start: ${startLocal} | End: ${endLocal} | ${j.durationMinutes}min | ${j.rationale || ''}`;
+      barHTML += `<div class="timeline-bar ${j.status}" title="${tooltip}" style="left:${sLeft}%;width:${Math.max(sWidth, 0.5)}%">${j.region} ${j.durationMinutes}m</div>`;
     }
 
     // Now line
@@ -730,23 +786,21 @@ function renderMap() {
   });
 
   let html = '';
-  // Draw simple continent outlines with SVG
-  html += `<svg viewBox="0 0 100 60" style="width:100%;height:100%;position:absolute;top:0;left:0" preserveAspectRatio="none">
-    <rect width="100" height="60" fill="transparent"/>
-    <!-- Very simplified continent shapes -->
-    <path d="M8,15 L22,12 L25,20 L22,35 L18,45 L12,48 L8,35 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
-    <path d="M26,15 L30,12 L32,18 L35,32 L30,50 L28,45 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
-    <path d="M40,10 L55,8 L58,20 L55,35 L48,38 L38,32 L36,20 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
-    <path d="M58,15 L75,10 L82,20 L85,30 L78,35 L65,32 L60,25 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
-    <path d="M75,40 L88,38 L90,50 L80,52 L75,48 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="0.3"/>
-  </svg>`;
 
-  Object.entries(REGION_COORDS).forEach(([id, coord]) => {
+  Object.entries(KNOWN_REGION_COORDS).forEach(([id, coord]) => {
     const count = regionCounts[id] || 0;
     const active = count > 0;
-    html += `<div class="region-dot ${active ? '' : 'idle'}" style="left:${coord.x}%;top:${coord.y}%">
-      <span class="region-count">${coord.label}${active ? ` (${count})` : ''}</span>
-    </div>`;
+    const isAvailable = availableRegions.includes(id);
+    // Show all known regions on the map, but dim unavailable ones
+    if (!isAvailable && !active) {
+      html += `<div class="region-dot idle" style="left:${coord.x}%;top:${coord.y}%;opacity:0.3">
+        <span class="region-count">${coord.label}</span>
+      </div>`;
+    } else {
+      html += `<div class="region-dot ${active ? '' : 'idle'}" style="left:${coord.x}%;top:${coord.y}%">
+        <span class="region-count">${coord.label}${active ? ` (${count})` : ''}</span>
+      </div>`;
+    }
   });
 
   map.innerHTML = html;
@@ -758,7 +812,7 @@ async function poll() {
 }
 
 initFormDefaults();
-poll();
+loadRegions().then(() => poll());
 setInterval(poll, 1500);
 </script>
 
