@@ -2,6 +2,8 @@
 
 A carbon-aware toy job scheduler that demonstrates how flexible workloads can be shifted into cleaner electricity windows. Users submit fictitious jobs with timing constraints, and the backend recommends optimal start times based on carbon-intensity forecasts. A web UI visualizes job lifecycles, timelines, and carbon-offset statistics using a controllable virtual clock.
 
+![A screenshot of CarbonPulse Scheduler showing the web interface and three active jobs.](.\docs\Screenshot.png)
+
 ## Architecture
 
 - **Backend (C# / ASP.NET Core)** — REST API with in-memory job store, carbon-aware scheduling engine, and virtual time model
