@@ -514,10 +514,17 @@ async function api(method, path, body) {
 // Initialize form defaults
 function initFormDefaults() {
   const now = new Date();
-  const start = new Date(now.getTime() + 30 * 60000);
-  const end = new Date(now.getTime() + 8 * 3600000);
+  const start = ceilHalfHour(new Date(now.getTime() + 30 * 60000));
+  const end = ceilHalfHour(new Date(now.getTime() + 8 * 3600000));
   document.getElementById('earliest-start').value = toLocalISOString(start);
   document.getElementById('latest-end').value = toLocalISOString(end);
+}
+
+function ceilHalfHour(d) {
+  const ms = d.getTime();
+  const half = 30 * 60000;
+  const rem = ms % half;
+  return rem === 0 ? d : new Date(ms + half - rem);
 }
 
 function toLocalISOString(d) {
@@ -570,9 +577,9 @@ document.getElementById('random-btn').addEventListener('click', async () => {
   const region = availableRegions[Math.floor(Math.random() * availableRegions.length)];
   const now = new Date(clockState.virtualNow);
   const offsetMin = Math.floor(Math.random() * 60);
-  const start = new Date(now.getTime() + offsetMin * 60000);
+  const start = ceilHalfHour(new Date(now.getTime() + offsetMin * 60000));
   const windowHours = 2 + Math.floor(Math.random() * 6);
-  const end = new Date(start.getTime() + windowHours * 3600000);
+  const end = ceilHalfHour(new Date(start.getTime() + windowHours * 3600000));
   const duration = 15 + Math.floor(Math.random() * 90);
 
   try {
